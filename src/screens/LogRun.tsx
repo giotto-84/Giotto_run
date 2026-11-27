@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { findSession, saveRun } from '../db/actions';
+import { findSession, saveRun, updateRun } from '../db/actions';
 import { parseGpx } from '../logic/gpx';
 import { formatDuration, formatPace, parseDuration } from '../logic/paces';
 import { ZONES } from '../logic/parq';
@@ -33,7 +33,9 @@ function localDateTime(d: Date): string {
 export function LogRun() {
   const nav = useNavigate();
   const [params] = useSearchParams();
-  const sessionId = params.get('seduta') ?? undefined;
+  const editId = params.get('corsa') ? Number(params.get('corsa')) : undefined;
+  const editing = useLiveQuery(async () => (editId !== undefined ? await db.runs.get(editId) : undefined), [editId]);
+  const sessionId = params.get('seduta') ?? editing?.sessionId ?? undefined;
   const fromDraft = params.has('bozza');
   const found = useLiveQuery(() => (sessionId ? findSession(sessionId) : Promise.resolve(undefined)), [sessionId]);
   const state = useLiveQuery(() => db.state.get('me'), []);
@@ -73,17 +75,37 @@ export function LogRun() {
     }
   }, [fromDraft]);
 
+  // modalità "correggi": precompila con la corsa già salvata
+  const [prefilled, setPrefilled] = useState(false);
   useEffect(() => {
-    if (shoes?.length && shoeId === undefined) setShoeId(shoes[shoes.length - 1].id);
-  }, [shoes, shoeId]);
+    if (!editing || prefilled) return;
+    setPrefilled(true);
+    setWhen(localDateTime(new Date(editing.date)));
+    setDuration(formatDuration(editing.durationSec));
+    setKm(editing.distanceKm ? String(editing.distanceKm).replace('.', ',') : '');
+    setHr(editing.avgHr ? String(editing.avgHr) : '');
+    setRpe(editing.rpe);
+    setPain(editing.pain);
+    setZone(editing.painZone);
+    setShoeId(editing.shoeId ?? -1);
+    setNotes(editing.notes ?? '');
+    setTrack(editing.track);
+    setSource(editing.source);
+  }, [editing, prefilled]);
 
   useEffect(() => {
+    if (editId !== undefined) return;
+    if (shoes?.length && shoeId === undefined) setShoeId(shoes[shoes.length - 1].id);
+  }, [shoes, shoeId, editId]);
+
+  useEffect(() => {
+    if (editId !== undefined) return;
     if (session && !duration && !fromDraft && session.type !== 'rinforzo') {
       const sec = session.steps.reduce((a, b) => a + b.sec, 0);
       setDuration(formatDuration(sec));
     }
     if (session?.type === 'rinforzo' && !duration) setDuration('25:00');
-  }, [session, duration, fromDraft]);
+  }, [session, duration, fromDraft, editId]);
 
   const importGpx = async (file: File) => {
     try {
@@ -120,11 +142,16 @@ export function LogRun() {
       rpe,
       pain,
       ...(pain && zone ? { painZone: zone } : {}),
-      ...(shoeId !== undefined && session?.type !== 'rinforzo' ? { shoeId } : {}),
+      ...(shoeId !== undefined && shoeId >= 0 && session?.type !== 'rinforzo' ? { shoeId } : {}),
       source,
       ...(track ? { track } : {}),
       ...(notes.trim() ? { notes: notes.trim() } : {}),
     };
+    if (editing) {
+      await updateRun({ ...run, id: editing.id, sessionId: editing.sessionId, sessionType: editing.sessionType });
+      nav(-1);
+      return;
+    }
     const tv = Number(testValue.replace(',', '.'));
     const test = isTest && tv > 0 ? { date: run.date, kind: testKind, value: tv } : undefined;
     const r = await saveRun(run, test);
@@ -139,7 +166,7 @@ export function LogRun() {
 
   return (
     <div className="stack">
-      <TopBar title={session ? (session.type === 'rinforzo' ? 'Rinforzo fatto' : 'Com’è andata?') : 'Registra corsa'} />
+      <TopBar title={editing ? 'Correggi corsa' : session ? (session.type === 'rinforzo' ? 'Rinforzo fatto' : 'Com’è andata?') : 'Registra corsa'} />
       {session && (
         <div className="card flat small">
           <strong>{session.title}</strong> · {session.summary}
@@ -181,7 +208,7 @@ export function LogRun() {
       </div>
       {pace && pace >= 120 && pace < 1800 && <div className="small muted">Passo medio: {formatPace(pace)} al km</div>}
 
-      {isTest && (
+      {isTest && !editing && (
         <label className="field card warn">
           <span>{testKind === 'cooper' ? 'Test: quanti metri hai percorso in 12 minuti?' : 'Test: quanti minuti hai corso senza fermarti?'}</span>
           <input className="input" inputMode="numeric" value={testValue} onChange={(e) => setTestValue(e.target.value)} placeholder={testKind === 'cooper' ? 'es. 2200' : 'es. 18'} />
@@ -231,7 +258,7 @@ export function LogRun() {
       {shoes && shoes.length > 0 && session?.type !== 'rinforzo' && (
         <label className="field">
           <span>Scarpe</span>
-          <select className="input" value={shoeId ?? ''} onChange={(e) => setShoeId(e.target.value ? Number(e.target.value) : undefined)}>
+          <select className="input" value={shoeId !== undefined && shoeId >= 0 ? shoeId : ''} onChange={(e) => setShoeId(e.target.value ? Number(e.target.value) : -1)}>
             <option value="">—</option>
             {shoes.map((s) => (
               <option key={s.id} value={s.id}>

@@ -2,7 +2,7 @@ import { db, currentWeek } from './db';
 import { addDays, daysBetween, iso, mondayOf } from '../logic/dates';
 import { generateWeek, initialState } from '../logic/generator';
 import { applyTest, moveSession, reviewWeek } from '../logic/progression';
-import type { PlanState, Profile, ReviewResult, Run, Session, TestResult, Week } from '../types';
+import type { PlanState, Profile, ReviewResult, Run, Session, Step, TestResult, Week } from '../types';
 
 export const today = () => iso(new Date());
 
@@ -91,7 +91,7 @@ export async function findSession(id: string): Promise<{ week: Week; session: Se
   return week && session ? { week, session } : undefined;
 }
 
-async function updateSession(id: string, patch: Partial<Session>): Promise<void> {
+export async function updateSession(id: string, patch: Partial<Session>): Promise<void> {
   const found = await findSession(id);
   if (!found) return;
   const { week } = found;
@@ -142,4 +142,30 @@ export async function saveTestOnly(test: Omit<TestResult, 'id'>): Promise<string
   const r = applyTest(st, test);
   await db.state.put(r.state);
   return r.message;
+}
+
+/** Salva i tempi personalizzati di una seduta (tenendo quelli originali per poterli ripristinare). */
+export async function customizeSession(id: string, steps: Step[], summary: string): Promise<void> {
+  const found = await findSession(id);
+  if (!found) return;
+  const s = found.session;
+  await updateSession(id, {
+    steps,
+    summary,
+    originalSteps: s.originalSteps ?? s.steps,
+    originalSummary: s.originalSummary ?? s.summary,
+  });
+}
+
+export async function restoreSession(id: string): Promise<void> {
+  const found = await findSession(id);
+  if (!found?.session.originalSteps) return;
+  const s = found.session;
+  await updateSession(id, { steps: s.originalSteps, summary: s.originalSummary ?? s.summary, originalSteps: undefined, originalSummary: undefined });
+}
+
+/** Corregge una corsa già registrata. */
+export async function updateRun(run: Run): Promise<void> {
+  if (run.id === undefined) return;
+  await db.runs.put(run);
 }
