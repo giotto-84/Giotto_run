@@ -120,6 +120,9 @@ export interface Session {
   hard: boolean;
   status: SessionStatus;
   runId?: number;
+  /** Tempi originali del piano, se l'utente li ha modificati. */
+  originalSteps?: Step[];
+  originalSummary?: string;
 }
 
 export type WeekKind = 'normale' | 'scarico' | 'gara';

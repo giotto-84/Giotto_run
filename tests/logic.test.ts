@@ -342,3 +342,45 @@ describe('promemoria, PAR-Q e altro', () => {
     expect(loadJump([{ start: '', km: 10, runs: 1 }, { start: '', km: 10, runs: 1 }, { start: '', km: 10, runs: 1 }, { start: '', km: 15, runs: 1 }])).toBeCloseTo(0.5);
   });
 });
+
+import { changeRepetitions, describeSteps, groupSteps, repetitions, runningSec, setGroupDuration } from '../src/logic/editSteps';
+
+describe('modifica dei tempi', () => {
+  const st0 = { ...initialState(base), ladder: 1 }; // 8 × (1 min corsa + 2 min cammino)
+  const steps = generateWeek(base, st0, 0, MON).sessions[0].steps;
+
+  it('raggruppa i passi uguali', () => {
+    const g = groupSteps(steps);
+    expect(g.find((x) => x.kind === 'corsa')!.count).toBe(8);
+    expect(g.find((x) => x.kind === 'cammino')!.count).toBe(7);
+    expect(g).toHaveLength(4);
+  });
+
+  it('cambia la durata di tutte le ripetizioni insieme', () => {
+    const g = groupSteps(steps).find((x) => x.kind === 'corsa')!;
+    const out = setGroupDuration(steps, g.key, 90);
+    expect(out.filter((s) => s.kind === 'corsa').every((s) => s.sec === 90)).toBe(true);
+    expect(runningSec(out)).toBe(8 * 90);
+    expect(setGroupDuration(steps, g.key, 1).find((s) => s.kind === 'corsa')!.sec).toBe(10);
+  });
+
+  it('aggiunge e toglie ripetizioni con il recupero e rinumera', () => {
+    expect(repetitions(steps)).toBe(8);
+    const more = changeRepetitions(steps, 1);
+    expect(repetitions(more)).toBe(9);
+    expect(more.filter((s) => s.kind === 'cammino')).toHaveLength(8);
+    expect(more.filter((s) => s.kind === 'corsa').map((s) => s.label).at(-1)).toMatch(/9 di 9/);
+    const less = changeRepetitions(steps, -1);
+    expect(repetitions(less)).toBe(7);
+    expect(less.filter((s) => s.kind === 'cammino')).toHaveLength(6);
+    expect(less[less.length - 1].kind).toBe('defaticamento');
+    expect(describeSteps(less)).toBe('7 × (1 min di corsa + 2 min di cammino)');
+  });
+
+  it('una corsa continua non ha ripetizioni', () => {
+    const cont = generateWeek(base, { ...st0, ladder: 10 }, 0, MON).sessions[0].steps;
+    expect(repetitions(cont)).toBe(0);
+    expect(changeRepetitions(cont, 1)).toBe(cont);
+    expect(describeSteps(cont)).toBe('20 min di corsa');
+  });
+});

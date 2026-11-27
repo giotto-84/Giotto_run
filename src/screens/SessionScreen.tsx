@@ -10,6 +10,8 @@ import { runPace } from '../logic/stats';
 import { DRILLS, getExercise, STRETCH, strengthCircuit, WARMUP } from '../data/exercises';
 import { Icon, Sheet, Thumb, TopBar, formatDate, fmt, useToast } from '../components/ui';
 import { SegBar, SegLegend, StepList, typeTag } from '../components/SessionBits';
+import { EditTimes } from '../components/EditTimes';
+import { WORKOUT_FOR_TYPE } from '../data/workouts';
 
 const WHY: Record<string, string> = {
   corsacammino: 'Alternare corsa e cammino abitua cuore, muscoli e tendini un passo alla volta. Corri piano: devi poter parlare.',
@@ -28,6 +30,7 @@ export function SessionScreen() {
   const { id = '' } = useParams();
   const nav = useNavigate();
   const [moveOpen, setMoveOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [toast, showToast] = useToast();
   const found = useLiveQuery(() => findSession(id), [id]);
   const profile = useLiveQuery(() => db.profile.get('me'), []);
@@ -68,7 +71,11 @@ export function SessionScreen() {
         {s.status === 'saltata' && <span className="tag">saltata</span>}
       </div>
       <p style={{ fontWeight: 600, fontSize: 19, margin: 0 }}>{s.summary}</p>
-      <p className="small muted">{WHY[s.type]}</p>
+      <p className="small muted" style={{ margin: 0 }}>{WHY[s.type]}</p>
+      <Link className="small" to={`/guida?tab=allenamenti#${WORKOUT_FOR_TYPE[s.type]}`}>
+        Cos’è questo allenamento? Leggi la spiegazione →
+      </Link>
+      {s.originalSteps && <span className="tag yellow" style={{ alignSelf: 'flex-start' }}>Tempi modificati da te</span>}
 
       {s.status === 'fatta' && run && (
         <div className="card ok">
@@ -78,14 +85,19 @@ export function SessionScreen() {
             {run.distanceKm ? ` · ${fmt(run.distanceKm, 2)} km · ${formatPace(runPace(run) ?? 0)}/km` : ''} · sforzo {run.rpe}/10
             {run.pain ? ` · ${run.pain === 2 ? 'dolore' : 'fastidio'}` : ''}
           </div>
-          <button
-            className="linkbtn small"
-            onClick={async () => {
-              if (confirm('Cancellare la corsa registrata? La seduta tornerà da fare.')) await deleteRun(run.id!);
-            }}
-          >
-            Cancella la registrazione
-          </button>
+          <div className="row wrap" style={{ gap: 16 }}>
+            <Link className="linkbtn small" to={`/registra?corsa=${run.id}`}>
+              Correggi
+            </Link>
+            <button
+              className="linkbtn small"
+              onClick={async () => {
+                if (confirm('Cancellare la corsa registrata? La seduta tornerà da fare.')) await deleteRun(run.id!);
+              }}
+            >
+              Cancella la registrazione
+            </button>
+          </div>
         </div>
       )}
 
@@ -97,6 +109,11 @@ export function SessionScreen() {
             <SegLegend />
           </div>
           <StepList steps={s.steps} treadmill={treadmill} />
+          {s.status !== 'fatta' && (
+            <button className="btn secondary block small" style={{ marginTop: 10 }} onClick={() => setEditOpen(true)}>
+              Modifica i tempi
+            </button>
+          )}
         </section>
       )}
 
@@ -164,6 +181,7 @@ export function SessionScreen() {
         </section>
       )}
 
+      <EditTimes session={s} open={editOpen} onClose={() => setEditOpen(false)} onSaved={showToast} />
       <Sheet open={moveOpen} onClose={() => setMoveOpen(false)} label="Sposta a…">
         <p className="small muted">Puoi spostarla in un giorno libero di questa settimana.</p>
         <div className="stack tight">

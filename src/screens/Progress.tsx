@@ -190,6 +190,9 @@ export function Progress() {
                 {r.pain ? ` · ${r.pain === 2 ? 'dolore' : 'fastidio'}` : ''}
                 {r.source === 'gpx' ? ' · da GPX' : r.source === 'gps' ? ' · GPS' : ''}
                 {r.notes && <div className="muted">{r.notes}</div>}
+                <Link className="linkbtn" to={`/registra?corsa=${r.id}`} style={{ marginRight: 16 }}>
+                  Correggi
+                </Link>
                 <button
                   className="linkbtn"
                   onClick={async () => {

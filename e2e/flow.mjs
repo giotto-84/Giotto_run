@@ -66,6 +66,20 @@ async function run(scheme) {
   await page.getByRole('heading', { name: 'Programma' }).waitFor();
   await shot('10-seduta');
 
+  // modifica dei tempi: +1 ripetizione e corsa più lunga
+  await page.getByRole('button', { name: 'Modifica i tempi' }).click();
+  await page.getByRole('button', { name: 'Una ripetizione in più' }).click();
+  await page.getByRole('button', { name: 'Allunga Corsa' }).click();
+  await shot('10b-modifica-tempi');
+  await page.getByRole('button', { name: 'Salva i tempi' }).click();
+  await page.getByText('Tempi modificati da te').waitFor();
+  await page.getByText('7 × (45 s di corsa + 3 min di cammino)').first().waitFor();
+  await shot('10c-seduta-modificata');
+  await page.getByRole('link', { name: /Cos’è questo allenamento/ }).click();
+  await page.getByText('Il cuore e il fiato migliorano in fretta').waitFor();
+  await shot('10d-guida-allenamenti');
+  await page.goBack();
+
   await page.getByRole('link', { name: /Inizia allenamento guidato/ }).click();
   await shot('11-player-pronto');
   await page.getByRole('button', { name: 'Via!' }).click();
@@ -93,6 +107,16 @@ async function run(scheme) {
   await page.getByRole('link', { name: 'Progressi' }).click();
   await page.getByRole('heading', { name: 'Km a settimana' }).waitFor();
   await shot('16-progressi');
+
+  // correggi una corsa già salvata
+  await page.locator('details.exrow summary').first().click();
+  await page.getByRole('link', { name: 'Correggi' }).first().click();
+  await page.getByRole('heading', { name: 'Correggi corsa' }).waitFor();
+  await page.getByPlaceholder('30:00').fill('31:15');
+  await page.getByRole('button', { name: 'Salva' }).click();
+  await page.getByRole('heading', { name: 'Km a settimana' }).waitFor();
+  await page.locator('details.exrow summary').first().click();
+  await page.getByText(/31:15/).first().waitFor();
 
   await page.getByRole('link', { name: 'Guida' }).click();
   await shot('17-guida');
